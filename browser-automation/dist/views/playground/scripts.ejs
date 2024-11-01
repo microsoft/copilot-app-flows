@@ -1,0 +1,60 @@
+<script src="https://unpkg.com/typewriter-effect@latest/dist/core.js"></script>
+<script src="https://unpkg.com/adaptivecards@2.7.1/dist/adaptivecards.js"></script>
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="https://unpkg.com/jquery.terminal@2.x.x/js/jquery.terminal.min.js"></script>
+<script src="https://unpkg.com/interactjs/dist/interact.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/seamless-scroll-polyfill@2.3.4"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    window.CardSessionId = urlParams.get('SessionId');    
+</script>
+<%- include('playground.js'); %>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/loader.min.js"></script>
+<script>
+    // require is provided by loader.min.js.
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
+    require(["vs/editor/editor.main"], async () => {
+        const scriptInput = document.querySelector("#card-script");
+        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+            noLib: true,
+            allowJs: true,
+            checkJs: true,
+            strict: true
+        });
+        const dslLibSource = await (await fetch("/lib/dsl.lib.d.ts?v=@(version)")).text()
+        const dslLibUri = "ts:filename/dsl.d.ts";
+        monaco.languages.typescript.javascriptDefaults.addExtraLib(dslLibSource, dslLibUri);
+        // When resolving definitions and references, the editor will try to use created models.
+        // Creating a model for the library allows "peek definition/references" commands to work with the library.
+        monaco.editor.createModel(dslLibSource, "typescript", monaco.Uri.parse(dslLibUri));
+
+        // Create the script model
+        var model = monaco.editor.createModel(scriptInput.value, "typescript", monaco.Uri.from({ scheme: "file", path: "dsl.js" }))
+        // Create the editor
+        const editor = window.scriptEditor = monaco.editor.create(document.querySelector('.monaco'), {
+            model: model,
+            language: 'javascript',
+            theme: 'vs-light',
+            minimap: { enabled: false },
+            glyphMargin: false,
+            folding: false,
+            automaticLayout: true,
+        });
+        scriptInput.addEventListener("chnage", () => editor.setValue(scriptInput.value));
+        editor.onDidChangeModelContent(() => scriptInput.value = editor.getValue());
+
+        // Allow the container to be resizable
+        interact('#monaco-container').resizable({ 
+            edges: { bottom: true, right: true }, 
+            listeners: {
+                move: event => {
+                    Object.assign(event.target.style, {
+                        width: `${event.rect.width}px`,
+                        height: `${event.rect.height}px`
+                    })
+                }
+            }
+        });
+    });
+</script>

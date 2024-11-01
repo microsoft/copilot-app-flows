@@ -1,0 +1,61 @@
+<div class="mx-auto">
+    <div id="incomplete-warning" class="alert alert-warning d-none" role="alert">
+        <i class="fa fa-warning me-1"></i>
+        You have incomplete settings. Please provide all required configuration below.
+      </div>
+    <form id="settings" class="needs-validation d-none p-4 border rounded" novalidate>
+        <h4 class="mb-4">Azure Relay Settings</h3>
+        <div class="form-group mb-3">
+            <div class="input-group has-validation">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="relay-connection-string" name="relayConnectionString" placeholder="(not set)" required>
+                    <label for="relay-connection-string">Connection String</label>
+                </div>
+                <button class="btn btn-dark fa-regular fa-pencil" type="button" id="edit-connection-string"></button>
+                <div class="invalid-feedback">Please provide a valid connection string</div>
+            </div>
+            <div class="form-text mt-2">Connection string must be for a <a href="https://learn.microsoft.com/en-us/azure/azure-relay/relay-what-is-it#hybrid-connections" target="_blank">Hybrid Connection</a> using a SAS rule with <strong>Listen</strong> and <strong>Send</strong> privileges</div>
+        </div>
+        <h4 class="mb-4">Azure OpenAI Settings</h3>
+        <div class="form-group mb-3">
+            <div class="input-group has-validation">
+                <div class="form-floating">
+                    <input type="url" class="form-control" id="az-openai-endpoint" name="azureOpenaiEndpoint" placeholder="Endpoint" required>
+                    <label for="az-openai-endpoint">Endpoint</label>
+                </div>
+                <div class="form-floating">
+                    <input type="password" class="form-control" id="az-openai-key" name="azureOpenaiKey" placeholder="API Key" required>
+                    <label for="az-openai-key">API Key</label>
+                </div> 
+                <button class="btn btn-dark fa-regular fa-pencil" type="button" id="edit-az-openai"></button>
+                <div class="invalid-feedback">Please provide a valid connection endpoint and key</div>
+            </div>
+            <div class="form-text mt-2">Azure OpenAI resource must be provisioned with a <strong>gpt-35-turbo</strong> model <strong>version 1106</strong> and higher</div>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+    </form>
+    <form id="client-connection" class="mt-4 border rounded p-4 d-none">
+        <h4 class="mb-4">Client Connection Info</h3>
+        <div class="form-text mb-2">
+            You will need to provide following connection URL and token in environment variables of your Power Platform solution. The token is valid for <b>90 days</b>
+        </div>
+        <div class="form-group mb-3">
+            <div class="input-group">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="connection-url" placeholder="Eurlndpoint" readonly>
+                    <label for="connection-url">URL</label>
+                </div>
+                <button class="btn btn-dark fa-regular fa-copy" type="button" data-clipboard-target="#connection-url"></button>
+            </div>            
+        </div>
+        <div class="form-group mb-3">
+            <div class="input-group">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="connection-token" placeholder="token" readonly>
+                    <label for="connection-token">Access Token</label>
+                </div>
+                <button class="btn btn-dark fa-regular fa-copy" type="button" data-clipboard-target="#connection-token"></button>
+            </div>            
+        </div>
+    </form>
+</div>

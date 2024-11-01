@@ -1,14 +1,12 @@
-# Project
+# App Flows
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+App-flows allows you to bring your existing UI-based app workloads to the AI-driven copilot and agent interface. At the core, app-flows provides a runtime for executing complex business task involving multiple turns, branches, loops while interacting with the existing application UI in a headless browser in a fashion similar to how a real human user would do so. An app-flows process is described in a **Domain Specific Language** (DSL) with a number of built-in LLM-based intelligent capabilities.
 
-As the maintainer of this project, please make a few updates:
+App-flows is also integrated with the Microsoft Copilot Studio (MCS) allowing for its availability in supported MCS channels and the rest of the MCS ecosystem.
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+## Getting Started
+
+Please see detailed instructions [here](./browser-automation/dist/views/index/getting-started.md)
 
 ## Contributing
 

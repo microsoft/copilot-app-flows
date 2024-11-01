@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="/public/css/site.css" />
+    <link rel="stylesheet" href="/public/css/outlook.a7e4aa.css" />
+    <link rel="stylesheet" href="/public/fontawesome/css/fontawesome.css" />
+    <link rel="stylesheet" href="/public/fontawesome/css/brands.css" />
+    <link rel="stylesheet" href="/public/fontawesome/css/solid.css" />
+    <%- include(`?${view}/head.ejs`); %>
+</head>
+<body>
+        <div class="d-flex flex-column" style="height: 100vh;">
+        <header>
+            <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow">
+                <div class="container">
+                    <a class="navbar-brand" href="/">App Flows</a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                            aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                        <ul class="navbar-nav flex-grow-1">
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="/">Home</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="/playground">Playground</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="/dsl-guide">DSL Guide</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="/settings">Settings</a>
+                            </li>
+                        </ul>
+                        <partial name="_LoginPartial" />
+                    </div>
+                </div>
+            </nav>
+            <div id="global-progress-bar" class="progress-bar d-none">
+                <div class="progress-bar-value"></div>
+            </div>
+        </header>
+        <div class="flex-grow-1 overflow-y-auto py-3">
+            <div class="container">
+                <main role="main">
+                    <%- include(`?${view}/content.ejs`); %>
+                </main>
+            </div>
+        </div>
+        <footer class="border-top footer text-muted py-4">
+            <div class="container">
+                &copy; 2024 - Microsoft</a>
+            </div>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="/public/js/site.js"></script>
+
+    <%- include(`?${view}/scripts.ejs`); %>
+</body>
+</html>

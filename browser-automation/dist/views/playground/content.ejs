@@ -1,0 +1,116 @@
+
+<div class="mx-auto" id="playground-container" style="min-height:200vh">
+    <form id="card-details">
+        <div class="form-group mb-3 ">
+            <label class="mb-2" for="card-url">App URL</label>
+            <input required type="url" class="form-control" id="card-url" >
+        </div>        
+        <div class="form-group mb-3 d-none">
+            <label class="mb-2" for="card-mode-selector">Mode</label>
+            <select class="form-select" id="card-mode-selector">
+                <option selected value="0">Script</option>
+                <option value="1">Action</option>
+            </select>
+        </div>
+        <div class="form-group mb-3 d-none">
+            <label class="mb-2" for="card-path">Path</label>
+            <input type="text" class="form-control" id="card-path" placeholder="(optional)">
+        </div>
+        <div class="form-group mb-3">
+            <label class="mb-2" for="card-script">Script</label>
+            <textarea class="form-control" id="card-script" style="display:none"></textarea>
+            <div id="monaco-container" class="form-control px-0 position-relative" style="min-height: 220px;min-width:300px;user-select: none;box-sizing: border-box">
+                <div class="monaco" style="min-height:200px;height:100%"></div>
+                <div class="position-absolute bottom-0 end-0 resizable" style="width:20px; height: 20px;pointer-events:none"></div>
+            </div>
+        </div>
+        <%# <div class="row mb-3">
+            <div class="col">
+                <div class="form-group">
+                    <label class="mb-2" for="card-content-selector">Content Selector</label>
+                    <input type="text" class="form-control" id="card-content-selector" placeholder="(optional)">
+                </div>
+            </div>
+            <div class="col">
+                <div class="form-group">
+                    <label class="mb-2" for="card-mode-selector">Content Mode</label>
+                    <select class="form-select" id="card-mode-selector">
+                        <option value="0">Generic</option>
+                        <option selected value="1">Action</option>
+                    </select>
+                </div>
+            </div>
+        </div> %>
+        <div class="form-group mb-3">
+            <label class="mb-2" for="user-prompt">Request Context</label>
+            <textarea class="form-control resizable" id="user-message" style="min-height: 100px;min-width:300px"></textarea>
+        </div>
+        <div class="dropdown">
+            <button class="btn btn-dark dropdown-toggle" type="button" id="execute-dropdown" data-bs-toggle="dropdown" aria-expanded="false">Execute</button>
+            <ul class="dropdown-menu" aria-labelledby="execute-dropdown">
+                <li><a class="dropdown-item" href="#" id="execute-autonomous">Autonomous</a></li>
+                <li><a class="dropdown-item" href="#" id="execute-manual">Interactive</a></li>
+            </ul>
+        </div>
+    </form>
+    <div id="output-container" class="py-5 show-placeholder">
+        <div class="border rounded d-flex align-items-stretch position-relative" style="background-color: var(--bs-gray-100);min-width: 1200px;">
+            <div class="flex-grow-1">
+                <div style="z-index:0;" class="d-flex justify-content-center overflow-hidden position-relative">
+                    <img id="liveview-img" class="z-1 w-100 bg-white" style="aspect-ratio: 1280/720;border:none" />                      
+                    <span class="live-indicator badge text-bg-danger position-absolute top-0 start-0 z-2 py-2 m-2"><i class="fa-solid fa-circle me-1 align-middle blink" style="font-size:.6em"></i> <span class="align-middle">LIVE</span></span>
+                    <div class="liveview-replay position-absolute top-0 start-0 z-2 m-2">
+                        <button id="liveview-replay-btn" type="button" class="btn btn-primary" onclick="launchLiveViewReplay()"><i class="fa-solid fa-play"></i> Replay</button>
+                    </div>
+                </div>
+            </div>
+            <div id="card-area" style="min-width: 400px;" class="mx-2 position-relative">
+                <div class="position-absolute w-100 h-100 overflow-y-auto">
+                    <div id="message-container" class="p-3 mb-4 text-2 blockquote hidden-if-empty"></div>
+                    <div id="card-container" class="hidden-if-empty" style="min-height:100px"></div>
+                </div>
+            </div>        
+            <div class="position-absolute start-50 top-50 translate-middle">
+                <div id="output-placeholder" class="d-flex flex-column">
+                    <img class="mx-auto" style="width: 4rem;" src="https://cdn.jsdelivr.net/npm/iconoir@7.9.0/icons/regular/square-cursor.svg"/>                    
+                    <p class="mt-4 text-muted text-center">Output will be available once you start an execution</p>
+                </div>
+            </div>
+            <div id="card-loading" class="d-flex justify-content-center align-items-end position-absolute w-100 bottom-100 start-0">
+                <div class="progress-bar">
+                    <div class="progress-bar-value"></div>
+                </div>
+            </div>
+        </div>
+    </div>    
+    <div style="max-width:600px;" class="my-3 mx-auto">
+        <button id="chain-card" class="btn btn-outline-dark d-none">Create Chained Action ...</button>
+    </div>
+    <div class="accordion mt-5 mb-4" id="debugoptions" style="--bs-accordion-btn-bg: var(--bs-gray-100);--bs-accordion-active-bg: var(--bs-gray-100);">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#terminalpanel" aria-controls="terminalpanel">
+                    <i class="fa-solid fa-bars-staggered me-2"></i>Debug Logs Console
+                </button>
+            </h2>
+            <div id="terminalpanel" class="accordion-collapse collapse" aria-labelledby="headingOne">
+                <div class="accordion-body p-1">
+                    <div id="terminal" style="--color: #222; --background: #fff;height:300px"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Video Replay Modal -->
+    <div class="modal fade text-light" data-bs-theme="dark" id="videoReplayModal" tabindex="-1" aria-labelledby="videoReplayModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="videoReplayModalLabel">Live View Replay</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

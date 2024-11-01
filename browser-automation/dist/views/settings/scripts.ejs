@@ -1,0 +1,157 @@
+<script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js"></script>
+<script>
+    'use strict'
+
+    // Fetch all the forms we want to apply custom Bootstrap validation styles to
+    const form = document.querySelector('form#settings');
+    const connField = form.querySelector('#relay-connection-string');
+    const connEditBtn = form.querySelector('#edit-connection-string');
+    const openaiEndpointField = form.querySelector('#az-openai-endpoint');
+    const openaiKeyField = form.querySelector('#az-openai-key');
+    const openaiEditBtn = form.querySelector('#edit-az-openai');
+    const incompleteWarning = document.querySelector('#incomplete-warning');
+
+    const clientConnectionForm = document.querySelector('form#client-connection');
+    const clientConnectionUrl = clientConnectionForm.querySelector('#connection-url');
+    const clientConnectionToken = clientConnectionForm.querySelector('#connection-token');
+
+    const hiddenPlaceholders = new WeakMap();
+
+    // Remove the button by-default, will addd back as needed
+    detachElement(connEditBtn);
+
+    
+    connEditBtn.addEventListener('click', () => {
+        connField.disabled = false;
+        connField.value = '';
+        detachElement(connEditBtn);
+        connField.focus();
+    })
+
+    openaiEditBtn.addEventListener('click', () => {
+        openaiKeyField.disabled = openaiEndpointField.disabled = false;
+        openaiKeyField.value = openaiEndpointField.value = '';
+        detachElement(openaiEditBtn);
+        openaiEndpointField.focus();
+    })
+
+    form.addEventListener('submit', async event => {
+            // Do not use browser default
+            event.preventDefault();
+            event.stopPropagation();
+            const isValid = form.checkValidity();
+            form.classList.add('was-validated');
+
+            if (isValid) {
+                // Gather form data and send to the API endpoint
+                const result = await (await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(Object.fromEntries(new FormData(form)))
+                })).json();
+                if(result){
+                    form.classList.remove('was-validated');
+                    const fields = [];
+                    fields.push({ field: connField, error: result.relayConnectionString?.error});
+                    fields.push({ field: openaiEndpointField, error: result.azureOpenaiEndpoint?.error});
+                    fields.push({ field: openaiKeyField, error: result.azureOpenaiKey?.error});
+                    let hasError = false;
+                    fields.forEach(e => {
+                        if(e.error){
+                            e.field.classList.add('is-invalid');
+                            hasError = true;
+                        }
+                        else {
+                            e.field.classList.remove('is-invalid')
+                        }
+                    });
+                    if(!hasError){
+                        // Reload config
+                        fetchConfig();
+                    }
+                }
+            }
+        }, false);
+
+    // Fetch settings and populate
+    async function fetchConfig(){
+        showProgress();
+        try{
+            const settings = await (await fetch('/api/settings', {
+                method: 'GET',
+            })).json();
+            // Set connection strings
+            connField.value = settings.relayConnectionString ?? '';
+            connField.disabled = !!settings.relayConnectionString;
+            showHideElement(connEditBtn, !settings.relayConnectionString);
+
+            if(settings.clientConnection?.url){
+                clientConnectionUrl.value = settings.clientConnection?.url ?? '';
+                clientConnectionToken.value = settings.clientConnection?.token ?? '';
+                showElement(clientConnectionForm);
+            }
+            else{
+                hideElement(clientConnectionForm);
+            }
+
+            openaiEndpointField.value = settings.azureOpenaiEndpoint ?? '';
+            openaiKeyField.value = settings.azureOpenaiKey ?? '';
+            const isOpenAIConfigured = !!settings.azureOpenaiEndpoint && !!settings.azureOpenaiKey;
+            openaiEndpointField.disabled = openaiKeyField.disabled = isOpenAIConfigured;
+            showHideElement(openaiEditBtn, !isOpenAIConfigured);
+
+            showElement(form)
+            if(settings.incomplete){
+                showElement(incompleteWarning);
+            }
+            else {
+                hideElement(incompleteWarning);
+            }
+        }
+        finally{
+            hideProgress();
+        }
+    }
+    // Fetch config on loas
+    fetchConfig();
+
+    function hideElement(element){
+        element.classList.add('d-none')
+    }
+    function showElement(element){
+        element.classList.remove('d-none')
+    }
+    
+    function detachElement(element){
+        if(!hiddenPlaceholders.has(element)){
+            // Create a comment node
+            const placeholder = document.createComment("hidden element");
+            element.after(placeholder);
+            element.remove();
+            hiddenPlaceholders.set(element, placeholder);
+        }
+    }
+
+    function attachElement(element){
+        if(hiddenPlaceholders.has(element)){
+            // Create a comment node
+            const placeholder = hiddenPlaceholders.get(element);
+            placeholder.after(element);
+            placeholder.remove();
+            hiddenPlaceholders.delete(element);
+        }
+    }
+
+    function showHideElement(element, hide){
+        if(hide){
+            detachElement(element);
+        }
+        else{
+            attachElement(element);
+        }
+    }
+
+    const clipboard = new ClipboardJS('.btn');
+</script>

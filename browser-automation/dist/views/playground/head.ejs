@@ -1,0 +1,31 @@
+<title>App Action Playground</title>
+<link href="https://cdn.jsdelivr.net/npm/vscode-codicons@0.0.17/dist/codicon.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/jquery.terminal@2.x.x/css/jquery.terminal.min.css" />
+<style>
+    #output-container:not(.liveview-active) .live-indicator {
+        display: none !important;
+    }
+    #output-container:not(.liveview-canreplay) .liveview-replay {
+        display: none !important;
+    }
+    #output-container:not(.liveview-starting) #liveview-spinner {
+        display: none !important;
+    }
+
+    #output-container:not(.show-placeholder) #output-placeholder {
+        display: none !important;
+    }
+    #liveview-img {
+        visibility: hidden;
+    }
+    #liveview-img[src] {
+        visibility: visible;
+    }
+    .blink {
+      animation: blinker 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blinker {  
+      50% { opacity: .2; }
+    }
+</style>
