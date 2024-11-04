@@ -1,8 +1,8 @@
-# App Flows
+# Microsoft Copilot App Flows
 
-App-flows allows you to bring your existing UI-based app workloads to the AI-driven copilot and agent interface. At the core, app-flows provides a runtime for executing complex business task involving multiple turns, branches, loops while interacting with the existing application UI in a headless browser in a fashion similar to how a real human user would do so. An app-flows process is described in a **Domain Specific Language** (DSL) with a number of built-in LLM-based intelligent capabilities.
+Microsoft Copilot App Flows (MCAF) allows you to bring your existing UI-based app workloads to the AI-driven copilot and agent interface. At the core, MCAF provides a runtime for executing complex business task involving multiple turns, branches, loops while interacting with the existing application UI in a headless browser in a fashion similar to how a real human user would do so. An MCAF process is described in a **Domain Specific Language** (DSL) with a number of built-in LLM-based intelligent capabilities.
 
-App-flows is also integrated with the Microsoft Copilot Studio (MCS) allowing for its availability in supported MCS channels and the rest of the MCS ecosystem.
+MCAF is also integrated with the Microsoft Copilot Studio (MCS) allowing for its availability in supported MCS channels and the rest of the MCS ecosystem.
 
 ## Getting Started
 
