@@ -10,8 +10,6 @@
         "@azure/identity-cache-persistence": "^1.1.0",
         "@azure/keyvault-secrets": "^4.8.0",
         "@azure/service-bus": "^7.9.5",
-        "@babel/core": "^7.24.5",
-        "@babel/preset-env": "^7.24.5",
         "@types/uuid": "^9.0.8",
         "@typescript-eslint/typescript-estree": "^7.8.0",
         "acorn": "^8.11.3",
@@ -32,6 +30,7 @@
         "puppeteer": "^22.4.1",
         "socket.io": "^4.8.0",
         "tinycolor2": "^1.6.0",
+        "tree-selector": "^2.1.1",
         "urlpattern-polyfill": "^10.0.0",
         "uuid": "^9.0.1"
     }

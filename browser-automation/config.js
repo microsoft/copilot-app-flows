@@ -34,6 +34,7 @@ module.exports = {
     networkTracking: {
         // Ignore list pattern helps disregarding non-essential network traffic (e.g. telemetry events) while detecting idle state in browser automation
         ignore:[
+            "https://*.services.visualstudio.com/v2/track*",
             "https://*.fluidrelay.azure.com/*",
             "https://*.aria.microsoft.com/*",
             "https://*.office.com/*",

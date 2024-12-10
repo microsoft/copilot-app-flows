@@ -66,9 +66,10 @@ Use this function to present a simple decision making screen to the user with a 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `options` | `object` |  |
-| `options.choices` | `string`[] | - |
+| `options.choices` | `string`[] \| `object`[] | - |
 | `options.description`? | `string` | - |
 | `options.label` | `string` | - |
+| `options.style`? | `"expanded"` \| `"compact"` | - |
 | `options.title`? | `string` | - |
 
 #### Returns
@@ -137,6 +138,81 @@ Use this function to check a condition and if it is semantically true, execute t
 
 ***
 
+### Inspect()
+
+> **Inspect**(`options`): [`ARIANode`](#arianode)[]
+
+Use this function to inspect and query the current accessible UI state of the underlying app. 
+All matching elements for the given selector will be returned as a collection of [ARIANode](#arianode) objects
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `options` | `object` |  |
+| `options.selector` | [`Selector`](#selector) | - |
+
+#### Returns
+
+[`ARIANode`](#arianode)[]
+
+***
+
+### JSONParse()
+
+> **JSONParse**(`text`): `any`
+
+Use this function to converts a JavaScript Object Notation (JSON) string into an object.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `text` | `string` | A valid JSON string. |
+
+#### Returns
+
+`any`
+
+***
+
+### JSONStringify()
+
+> **JSONStringify**(`value`, `space`?): `string`
+
+Use this function to converts a value to a JavaScript Object Notation (JSON) string.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `value` | `any` | A value, usually an object or array, to be converted. |
+| `space`? | `string` \| `number` | Adds indentation, white space, and line break characters to the return-value JSON text to make it easier to read. |
+
+#### Returns
+
+`string`
+
+***
+
+### Log()
+
+> **Log**(`message`): `void`
+
+Use this function to log a message from your DSL script that can be seen in the logs window in the Playground and other places
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `message` | `string` | Message to log |
+
+#### Returns
+
+`void`
+
+***
+
 ### Note()
 
 > **Note**(`message`): `void`
@@ -183,7 +259,7 @@ Use exclude parameter to identify which elements to be omitted. Use title and de
 
 ### Select()
 
-> **Select**(`selector`): `void`
+> **Select**(`selector`, `options`?): `void`
 
 Use this function to perform a click of a button, switch to a tab and other click interactions on an element. 
 User will need to identify the element by a name which is specified in the selector.
@@ -193,6 +269,28 @@ User will need to identify the element by a name which is specified in the selec
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `selector` | [`Selector`](#selector) |  |
+| `options`? | `object` | - |
+| `options.useGesture`? | `boolean` | Indicates if a click is to be performed using a simulated user gesture (e.g. simulated mouse click on the screen) Default is false and click operation is normally performed directly using JavaScript regardless of the visual state of the element. This makes the click operation fast and reliable. When using the gesture, the element is first checked to make sure that it is clickable (i.e. not hidden, or not inaccessible or not disabled) and then a click is performed with a simulated gesture interaction. Gesture simulation allows the click to be treated within the "active interaction" state by browsers and it will allow certain restricted operations (e.g opening a new window, starting a media capture etc.) which will otherwise be blocked by the direct click. See more details - [User Activation](https://developer.mozilla.org/en-US/docs/Web/Security/User_activation). NOTE: gesture simulation may be slow and unreliable if the screen has animation or is in the middle of a re-layout operation. |
+
+#### Returns
+
+`void`
+
+***
+
+### SetValue()
+
+> **SetValue**(`selector`, `value`): `void`
+
+Use this function to set a value of an input on the underlying page
+User will need to identify the element using the selector.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `selector` | [`Selector`](#selector) |  |
+| `value` | `string` |  |
 
 #### Returns
 
@@ -219,3 +317,23 @@ You can provide custom timeout and polling interval, if needed. Custom polling i
 #### Returns
 
 `void`
+
+## Interfaces
+
+### ARIANode
+
+Describes a node in the [ARIA](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA) accessibility tree
+
+#### Properties
+
+| Property | Type | Description |
+| ------ | ------ | ------ |
+| `checked?` | `boolean` \| `"mixed"` | Whether the checkbox is checked, or in a [mixed state](https://www.w3.org/TR/wai-aria-practices/examples/checkbox/checkbox-2/checkbox-2.html). |
+| `description?` | `string` | An additional human readable description of the node. |
+| `invalid?` | `string` | Whether and in what way this node's value is invalid. |
+| `level?` | `number` | The level of a heading. |
+| `multiselectable?` | `boolean` | Whether more than one child can be selected. |
+| `name?` | `string` | A human readable name for the node. |
+| `nodeId` | `string` \| `number` | A unique identifier for the node |
+| `role` | `string` | The [role](https://www.w3.org/TR/wai-aria/#usage_intro) of the node. |
+| `value?` | `string` \| `number` | The current value of the node. |

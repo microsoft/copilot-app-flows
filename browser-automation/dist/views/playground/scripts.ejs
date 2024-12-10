@@ -22,15 +22,20 @@
             checkJs: true,
             strict: true
         });
-        const dslLibSource = await (await fetch("/lib/dsl.lib.d.ts?v=@(version)")).text()
-        const dslLibUri = "ts:filename/dsl.d.ts";
-        monaco.languages.typescript.javascriptDefaults.addExtraLib(dslLibSource, dslLibUri);
-        // When resolving definitions and references, the editor will try to use created models.
-        // Creating a model for the library allows "peek definition/references" commands to work with the library.
-        monaco.editor.createModel(dslLibSource, "typescript", monaco.Uri.parse(dslLibUri));
+        async function addLib(fileName, fetchUri){
+            const libSource = await (await fetch(`${fetchUri}?v=@(version)`)).text()
+            monaco.languages.typescript.javascriptDefaults.addExtraLib(libSource, fileName);
+            // When resolving definitions and references, the editor will try to use created models.
+            // Creating a model for the library allows "peek definition/references" commands to work with the library.
+            monaco.editor.createModel(libSource, "typescript", monaco.Uri.parse(fileName));
+        }
+        await Promise.all([
+            addLib("ts:filename/dsl.lib.d.ts", "/lib/dsl.lib.d.ts"),
+            addLib("ts:filename/es5-dsl.lib.d.ts", "/lib/es5-dsl.lib.d.ts")
+        ])
 
         // Create the script model
-        var model = monaco.editor.createModel(scriptInput.value, "typescript", monaco.Uri.from({ scheme: "file", path: "dsl.js" }))
+        var model = monaco.editor.createModel(scriptInput.value, "typescript", monaco.Uri.from({ scheme: "file", path: "dsl.ts" }))
         // Create the editor
         const editor = window.scriptEditor = monaco.editor.create(document.querySelector('.monaco'), {
             model: model,
@@ -41,7 +46,7 @@
             folding: false,
             automaticLayout: true,
         });
-        scriptInput.addEventListener("chnage", () => editor.setValue(scriptInput.value));
+        scriptInput.addEventListener("change", () => editor.setValue(scriptInput.value));
         editor.onDidChangeModelContent(() => scriptInput.value = editor.getValue());
 
         // Allow the container to be resizable

@@ -33,7 +33,29 @@ declare type SemanticCondition = string | boolean;
  * User will need to identify the element by a name which is specified in the selector.
  * @param selector 
  */
-declare function Select(selector: Selector) : void;
+declare function Select(selector: Selector, options?: {
+   /**
+    * Indicates if a click is to be performed using a simulated user gesture (e.g. simulated mouse click on the screen)
+    * Default is false and click operation is normally performed directly using JavaScript regardless of the visual
+    * state of the element. This makes the click operation fast and reliable. When using the gesture, the element is first 
+    * checked to make sure that it is clickable (i.e. not hidden, or not inaccessible or not disabled) and then a click 
+    * is performed with a simulated gesture interaction. Gesture simulation allows the click to be treated within the 
+    * "active interaction" state by browsers and it will allow certain restricted operations (e.g opening a new window, 
+    * starting a media capture etc.) which will otherwise be blocked by the direct click. See more details - 
+    * {@link https://developer.mozilla.org/en-US/docs/Web/Security/User_activation | User Activation}. 
+    * NOTE: gesture simulation may be slow and unreliable if the screen has animation or is in the middle of a 
+    * re-layout operation.
+    */
+   useGesture?: boolean
+}) : void;
+
+/**
+ * Use this function to set a value of an input on the underlying page
+ * User will need to identify the element using the selector.
+ * @param selector 
+ * @param value 
+ */
+declare function SetValue(selector: Selector, value: string) : void;
 
 /**
  * Use this function when user wants to collect inputs from outside at a particular step during the automation. 
@@ -45,10 +67,17 @@ declare function Select(selector: Selector) : void;
 declare function Present(options?: { select: Selector, include?: Selector, exclude?: Selector, title?: string, description?: string }): void;
 
 /**
+ * Use this function to inspect and query the current accessible UI state of the underlying app. 
+ * All matching elements for the given selector will be returned as a collection of {@link ARIANode} objects
+ * @param options 
+ */
+declare function Inspect(options: { selector: Selector }): ARIANode[];
+
+/**
  * Use this function to present a simple decision making screen to the user with a few choices and obtain the selected choice value
  * @param options 
  */
-declare function Confirm(options: { title?: string, description?: string, label: string, choices: string[]}) : string;
+declare function Confirm(options: { title?: string, description?: string, label: string, choices: string[] | { name: string, value: string }[], style?: "compact" | "expanded"}) : string;
 
 /**
  * Use this function to process a repeating sub-task. 
@@ -94,15 +123,78 @@ declare function WaitWhile(condition: () => boolean, options?: { timeout?: numbe
  */
 declare function Assert(condition: boolean, errorMessage: string): void;
 
-// Following globals types are required by the TS compiler
-interface Array<T> {}
-interface Boolean {}
-interface Function {}
-interface IArguments {}
-interface Number {}
-interface Object {}
-interface String {}
-interface RegExp {}
+/**
+ * Use this function to log a message from your DSL script that can be seen in the logs window in the Playground and other places
+ * @param message Message to log
+ */
+declare function Log(message: string): void;
+
+/**
+ * Use this function to converts a JavaScript Object Notation (JSON) string into an object.
+ * @param text A valid JSON string.
+ */
+declare function JSONParse(text: string): any;
+
+/**
+ * Use this function to converts a value to a JavaScript Object Notation (JSON) string.
+ * @param value A value, usually an object or array, to be converted.
+ * @param space Adds indentation, white space, and line break characters to the return-value JSON text to make it easier to read.
+ */
+declare function JSONStringify(value: any, space?: string | number): string;
+
+/**
+ * Describes a node in the {@link https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA | ARIA} accessibility tree 
+ */
+interface ARIANode {
+   /**
+    * A unique identifier for the node
+    */
+   nodeId: string | number;
+   /**
+     * The {@link https://www.w3.org/TR/wai-aria/#usage_intro | role} of the node.
+     */
+   role: string;
+   /**
+    * A human readable name for the node.
+    */
+   name?: string;
+   /**
+    * The current value of the node.
+    */
+   value?: string | number;
+   /**
+    * An additional human readable description of the node.
+    */
+   description?: string;   
+   disabled?: boolean;
+   multiline?: boolean;
+   /**
+    * Whether more than one child can be selected.
+    */
+   multiselectable?: boolean;
+   readonly?: boolean;
+   required?: boolean;
+   selected?: boolean;
+   /**
+    * Whether the checkbox is checked, or in a
+    * {@link https://www.w3.org/TR/wai-aria-practices/examples/checkbox/checkbox-2/checkbox-2.html | mixed state}.
+    */
+   checked?: boolean | 'mixed';
+   /**
+    * The level of a heading.
+    */
+   level?: number;
+   autocomplete?: string;
+   /**
+    * Whether and in what way this node's value is invalid.
+    */
+   invalid?: string;
+   children?: ARIANode[];
+   // Indicates if it is an ordered list container (e.g. <ol> tag)
+   ordered?: boolean;
+   // An optional input-type of the role (e.g. date, time etc.) provided for some of the generic input elements (textbox, combobox)
+   inputType?:"date" | "time" | "password";
+}
 
 // Following is a hack to force TS compiler treating Selector as a unique type
 declare abstract class CSSSelector {

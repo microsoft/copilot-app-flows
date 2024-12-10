@@ -15,14 +15,14 @@ var urlpatternPolyfill = require('urlpattern-polyfill');
 var identity = require('@azure/identity');
 var identityCachePersistence = require('@azure/identity-cache-persistence');
 var keyvaultSecrets = require('@azure/keyvault-secrets');
+var treeSelector = require('tree-selector');
+var node_crypto = require('node:crypto');
 var tinycolor = require('tinycolor2');
 var socket_io = require('socket.io');
-var node_crypto = require('node:crypto');
 var ejs = require('ejs');
 var marked = require('marked');
 var JsInterpreter = require('js-interpreter');
 var ts = require('typescript');
-var core = require('@babel/core');
 var OpenAI = require('openai');
 var Fuse = require('fuse.js');
 var serviceBus = require('@azure/service-bus');
@@ -97,7 +97,7 @@ async function updateConfig(delta) {
     await fs.promises.writeFile(path.join(process.cwd(), envConfigPath), `module.exports = ${JSON.stringify(envConfig, null, 4)}`);
 }
 
-// Used for captureing logging context via async execution chain
+// Used for capturing logging context via async execution chain
 const asyncLocalStorage = new async_hooks.AsyncLocalStorage();
 // Runs an action with the given trace context
 function withTraceContext(contextParams, action) {
@@ -459,28 +459,56 @@ async function acquireRPACredentials() {
     };
 }
 
-// Note the two following selectors must be kept in sync as they contain duplicate parts for attributes
-const selectorRegex = /(?<role>\w+)?(?<attributes>(\[(?<attname>\w+)=(?<attvalue>("[^"]+")|('[^']+')|(true|false)|\d+)\])*)/g;
-const selectorAttrRegex = /\[(?<attname>\w+)=(?<attvalue>("[^"]+")|('[^']+')|(true|false)|\d+)\]/g;
+function isNullOrUndefineOrEmpty(value) {
+    return value === null || value === undefined || value === '';
+}
+async function arrayMapAsync(array, mapper) {
+    if (array) {
+        const results = [];
+        for (const item of array) {
+            results.push(await mapper(item));
+        }
+        return results;
+    }
+}
+// Generates a random string using node-crypto
+function cryptoRandomString(length) {
+    if (length % 2 !== 0) {
+        length++;
+    }
+    return node_crypto.randomBytes(length / 2).toString("hex");
+}
+function asString(arg) {
+    if (typeof arg === "string") {
+        return arg;
+    }
+}
+function asInt(value, defaultValue) {
+    return (typeof value === 'string' ? parseInt(value) : value) ?? defaultValue;
+}
+
+// Accessibility tree traversal and operations
+// Regex to parse individual selectors from a group (separated by comma)
+const selectorGroupRegex = /([^"',]|('[^']*?')|("[^"]*?"))+/g;
 // Selects nodes using the selector syntax, e.g. dialog[modal=true] or button[name="Resolve Case"]
 function selectNodes(root, selector, maxCount) {
-    const matchSelector = parseSelector(selector);
+    const matchSelector = parseARIASelector(selector);
     if (matchSelector) {
-        // Now find the node
-        return findNodes(root, node => matchSelector.match(node), maxCount);
+        // Now find matching nodes
+        return matchSelector.query(root);
     }
 }
 // Trim nodes from a tree matching the given selector
 function trimNodes(root, includeSelector, excludeSelector) {
-    const exclude = parseSelector(excludeSelector);
-    const include = parseSelector(includeSelector);
+    const exclude = parseARIASelector(excludeSelector);
+    const include = parseARIASelector(includeSelector);
     const trim = (node) => {
         if (exclude && exclude.match(node)) {
-            // If an exlcusion list is given and the the node is on the exlcusion list, it is omitted along with all its children
+            // If an exclusion list is given and the the node is on the exclusion list, it is omitted along with all its children
             return null;
         }
         else if (include?.match(node)) {
-            // If an inclusion list is given and the node is on the given inlcusion list, 
+            // If an inclusion list is given and the node is on the given inclusion list, 
             // it is included along with all its children
             return node;
         }
@@ -502,96 +530,41 @@ function trimNodes(root, includeSelector, excludeSelector) {
     };
     return trim(root);
 }
-function parseSelector(selector) {
-    if (!selector) {
+const treeSelectorOptions = {
+    tag: n => n?.role,
+    id: n => n ? `${n.nodeId}` : undefined,
+    children: n => n.children ?? [],
+    attr: (n, name) => asString(n[name]),
+    contents: () => undefined,
+    className: () => '',
+    parent: () => undefined,
+};
+function parseARIASelector(selectorString) {
+    if (!selectorString) {
         return null;
     }
-    const rules = Array.from(selector?.matchAll(selectorRegex)).map(selectorMatch => {
-        // Role is not always required
-        // Without role, any role will match
-        let role = selectorMatch.groups?.["role"]?.toLowerCase();
-        // Parse attributes if present
-        const attributesSelector = selectorMatch.groups?.["attributes"];
-        const attributes = [];
-        if (attributesSelector) {
-            for (const attrMatch of attributesSelector.matchAll(selectorAttrRegex)) {
-                let attValue = attrMatch.groups["attvalue"];
-                if (typeof attValue === "string" && attValue.charAt(0) == "'") {
-                    // This is a single quote string literal, parse it out
-                    attValue = attValue.substring(1, attValue.length - 1);
-                }
-                else {
-                    // Parse as json
-                    attValue = JSON.parse(attValue);
-                }
-                const attName = attrMatch.groups["attname"].toLowerCase();
-                if (attName === 'role') {
-                    // Role can also be specified as an attribute
-                    role = attValue;
-                }
-                else {
-                    attributes.push({
-                        name: attName,
-                        value: attValue
-                    });
-                }
-            }
-        }
-        return { role, attributes };
-    }).filter(i => !!i);
-    if (rules?.length > 0) {
+    try {
+        // Selectors may be provided as groups (separated by ,)
+        // Parse selector string as a group and extract individual selector        
+        const selectors = selectorString.match(selectorGroupRegex)?.map(rule => treeSelector.parseSelector(rule));
+        const querySelector = treeSelector.createQuerySelector(treeSelectorOptions);
+        const matches = treeSelector.createMatches(treeSelectorOptions);
         return {
+            query(root) {
+                return selectors.flatMap(selector => querySelector(selector, root));
+            },
             match(node) {
-                // As long there is at least one rule the node matches with, it will be a match
-                return node && rules.find(rule => isNodeMatch(node, rule)) != null;
+                return selectors.some(selector => matches(selector, node));
             }
         };
     }
-    else {
-        throw Error(`Invalid node selector ${selector}`);
+    catch (ex) {
+        throw new Error(`Error parsing selector "${selectorString}"`);
     }
-}
-function isNodeMatch(node, rule) {
-    // If the rule has neither a role or atrributes, then it is a void rule and nothing matches it
-    if (!rule.role &&
-        !(rule.attributes?.length > 0)) {
-        return false;
-    }
-    // If rule has role, it must match
-    // If the role does not match, then node is not a match
-    if (rule.role &&
-        node.role?.toLowerCase() !== rule.role) {
-        return false;
-    }
-    // If rule has attributes, all of them must match
-    // Any attribute NOT matching will make the node a non-match
-    if (rule.attributes?.length > 0 &&
-        rule.attributes.find(att => !isAttrMatch(node[att.name], att.value)) != null) {
-        // Found a rule attribute that is not matching with the node attribute value
-        return false;
-    }
-    // At this point, this node hasn't been discarded, so it is a match
-    return true;
-}
-function isAttrMatch(attr, value) {
-    if (typeof value === "boolean") {
-        // Truthy or falsey
-        return value ? (!!attr) : !attr;
-    }
-    else {
-        // Use broad match
-        return trim(attr) == value;
-    }
-}
-function trim(value) {
-    if (typeof value === "string") {
-        return value.trim();
-    }
-    return value;
 }
 // Selects a node using the selector syntax
 function selectNode(root, selector) {
-    return selectNodes(root, selector, 1)?.[0];
+    return selectNodes(root, selector)?.[0];
 }
 // Finds nodes in a tree that are matching the given condition, starting from the given root node using depth-first algorithm
 // Returns a collection of found nodes or undefined if none found
@@ -617,15 +590,15 @@ function findNodes(root, match, maxCount, exclude) {
             }
         }
         else {
-            // Find any chidren and add them to the stack in reverse order so that they are popped in the original order
-            // NOTE: we are skipping chidren from search if the parent is a match
+            // Find any children and add them to the stack in reverse order so that they are popped in the original order
+            // NOTE: we are skipping children from search if the parent is a match
             node.children?.map(n => n).reverse().forEach(c => stack.push(c));
         }
     }
     return results.length ? results : undefined;
 }
 
-async function trySetInputElement(page, element, elementName, value) {
+async function trySetInputElement$1(page, element, elementName, value) {
     if (element) {
         if (!await isHidden(element)) {
             //log(`Found element ${await element.evaluate(el => el.outerHTML)}`)
@@ -676,17 +649,24 @@ async function trySetInputElement(page, element, elementName, value) {
     }
     return false;
 }
-async function tryClickElement(page, element, elementName) {
+async function tryClickElement$1(page, element, elementName, options) {
     if (element) {
         log(`Button found ${elementName}`);
+        const useGesture = options?.useGesture ?? false;
         //log(`Found element ${await element.evaluate(el => el.outerHTML)}`)
-        if (!await isHidden(element)) {
-            // Make sure button is not disabled
-            if (!await isDisabled(element)) {
+        // When using gesture, make sure the button is not hidden
+        if (!useGesture || !await isHidden(element)) {
+            // When using gesture, make sure the button is not disabled
+            if (!useGesture || !await isDisabled(element)) {
                 log(`Clicking a button ${elementName}`);
                 //await element.focus();
                 //await page.keyboard.press("Enter");
-                await element.click();
+                if (useGesture) {
+                    await element.click();
+                }
+                else {
+                    await element.evaluate((el) => el.click());
+                }
                 // By clicking, we might be still on the login page (e.g. when some more steps are remaining in the flow),
                 // or we might be navigating away when the login flow completes
                 log("Waiting for network to go idle or the page to navigate out");
@@ -786,7 +766,6 @@ async function transformNode(page, plugin, node, options) {
         // Leaf elements
         case "labeltext":
         case "statictext":
-        case "textbox":
         case "checkbox":
             // Children are ignored for these roles
             // Each leaf node must have a name
@@ -795,6 +774,8 @@ async function transformNode(page, plugin, node, options) {
                 return [rest];
             }
             break;
+        case "textbox":
+            return [await transformTextbox(page, node)];
         case "option":
             // Option is a passthrough text node, but we preserve its children in the output as they are used to understand individual parts of the option label
             if (node.name) {
@@ -807,6 +788,7 @@ async function transformNode(page, plugin, node, options) {
         case "paragraph":
         case "listitem":
         case "alert":
+        case "button": // only text content is preserved for buttons
             return [transformTextContainerNode(node)];
         case "heading":
             // Filter out non-static-text content (e.g. links) from headings
@@ -852,9 +834,17 @@ async function transformNode(page, plugin, node, options) {
             return (await plugin.transformNodes(page, node.children, options));
     }
 }
+async function transformTextbox(page, node) {
+    // Determine the type of the textbox
+    const textboxEl = await resolveAccessibleElement(page, asInt(node.nodeId));
+    if (textboxEl) {
+        const inputType = await textboxEl.evaluate((el) => el.type);
+        return { ...node, inputType };
+    }
+}
 async function transformList(page, node) {
     // Determine if this is ordered or unordered list
-    const listEl = await resolveAccessibleElement(page, node.nodeId);
+    const listEl = await resolveAccessibleElement(page, asInt(node.nodeId));
     if (listEl) {
         const ordered = await listEl.evaluate((el) => el.tagName == "OL");
         // Find all list items, get their text content without the marker
@@ -903,13 +893,13 @@ async function transformContainer(page, plugin, container, options) {
     return { ...container, children: await plugin.transformNodes(page, container.children, options) };
 }
 async function transformButton(page, button) {
-    const buttonEl = await resolveAccessibleElement(page, button.nodeId);
+    const buttonEl = await resolveAccessibleElement(page, asInt(button.nodeId));
     // Filter out certain properties
     const { disabled, children, ...rest } = button;
     return {
         // A button may be disabled by CSS and not on the AX tree, use our utility to ensure that
         disabled: button.disabled || await isDisabled(buttonEl),
-        constrastRatio: await getElementContrastRatio(buttonEl),
+        contrastRatio: await getElementContrastRatio(buttonEl),
         ...rest
     };
 }
@@ -936,7 +926,7 @@ async function getElementContrastRatio(element) {
             underlayColor
         };
     });
-    log(`Retrieved elements contrast states: ${JSON.stringify(states)}`);
+    //log(`Retrieved elements contrast states: ${JSON.stringify(states)}`)
     return Math.max(
     // Background color gets higher priority as it is more prominent
     // However, the score cannot exceed the standard max 21
@@ -1000,7 +990,7 @@ async function transformComboBox(page, plugin, comboBox, options) {
         //log(`Expanding combo-box ${comboBox.name} to find options`);
         // We need to expand the combo-box to to get its options
         // Find the combobox element
-        const comboBoxEl = await resolveAccessibleElement(page, comboBox.nodeId); // await page.$(`::-p-aria(combobox[name="${cssEscape(comboBox.name)}"])`);
+        const comboBoxEl = await resolveAccessibleElement(page, asInt(comboBox.nodeId)); // await page.$(`::-p-aria(combobox[name="${cssEscape(comboBox.name)}"])`);
         if (comboBoxEl) {
             // Special case for FnO comboboxes
             const isFno = await comboBoxEl.evaluate(el => {
@@ -1077,11 +1067,11 @@ class CorePlugin {
     findElement(page, selector) {
         return page.$(selector);
     }
-    tryClickElement(page, element, elementName) {
-        return tryClickElement(page, element, elementName);
+    tryClickElement(page, element, elementName, options) {
+        return tryClickElement$1(page, element, elementName, options);
     }
     trySetInputElement(page, element, elementName, value) {
-        return trySetInputElement(page, element, elementName, value);
+        return trySetInputElement$1(page, element, elementName, value);
     }
     getAccessibilitySnapshot(page, options) {
         return getAccessibilitySnapshot(page, options);
@@ -1234,7 +1224,7 @@ class FnoPlugin extends CorePlugin {
     }
     async transformComboBox(page, comboBox, options) {
         if (!options.readonly) {
-            const comboBoxEl = await resolveAccessibleElement(page, comboBox.nodeId);
+            const comboBoxEl = await resolveAccessibleElement(page, asInt(comboBox.nodeId));
             // Find the server-form context of the control
             const dynContext = await this.findControlContext(comboBoxEl);
             // Check if it is a date or time control (we will need to load the supporting utility libs first)
@@ -1468,16 +1458,24 @@ async function getPlugin(page) {
     return pagePlugin;
 }
 
-async function tryClick(page, selector) {
+async function tryClick(page, cssSelector, options) {
     const plugin = await getPlugin(page);
-    const element = await plugin.findElement(page, selector);
-    return await plugin.tryClickElement(page, element, selector);
+    const element = await plugin.findElement(page, cssSelector);
+    return await plugin.tryClickElement(page, element, cssSelector, options);
+}
+async function tryClickElement(page, element, identifier, options) {
+    const plugin = await getPlugin(page);
+    return await plugin.tryClickElement(page, element, identifier, options);
 }
 // Tries to set an input value if the input element exists
-async function trySetInput(page, selector, value) {
+async function trySetInput(page, cssSelector, value) {
     const plugin = await getPlugin(page);
-    const element = await plugin.findElement(page, selector);
-    return await plugin.trySetInputElement(page, element, selector, value);
+    const element = await plugin.findElement(page, cssSelector);
+    return await plugin.trySetInputElement(page, element, cssSelector, value);
+}
+async function trySetInputElement(page, element, identifier, value) {
+    const plugin = await getPlugin(page);
+    return await plugin.trySetInputElement(page, element, identifier, value);
 }
 
 // A deferred is a promise that can be resolved externally
@@ -2112,31 +2110,6 @@ var fno_inject_styles = "[data-dyn-image-type='Symbol']{ \r\n    display: none !
 
 var mda_inject_styles = "[data-id=\"form-header\"]{\r\n    display: none !important;\r\n}\r\n[data-id^=\"outerHeaderContainer\"] button:not([role=\"menuitem\"]){\r\n    display: none !important;\r\n}";
 
-function isNullOrUndefineOrEmpty(value) {
-    return value === null || value === undefined || value === '';
-}
-async function arrayMapAsync(array, mapper) {
-    if (array) {
-        const results = [];
-        for (const item of array) {
-            results.push(await mapper(item));
-        }
-        return results;
-    }
-}
-// Generates a random string using node-crypto
-function cryptoRandomString(length) {
-    if (length % 2 !== 0) {
-        length++;
-    }
-    return node_crypto.randomBytes(length / 2).toString("hex");
-}
-function asString(arg) {
-    if (typeof arg === "string") {
-        return arg;
-    }
-}
-
 const pageTimeout = 10 * 60 * 1000; // 10 mins in ms
 // Page cache holds non-expired opened pages until they timeout
 const pageCache = new Map();
@@ -2276,15 +2249,19 @@ function getPageSession(sessionId) {
         return pageCacheEntry.page;
     }
 }
-// Inspects an element on the page based on the given selector
-async function inspectElement(page, selector) {
+// Inspects one or more elements on the page based on the given selector
+async function inspectElements(page, selector) {
     const plugin = await getPlugin(page);
     // Wait for any updates to settle down
     await plugin.waitForUpdatesDone(page);
     const snapshot = await plugin.getAccessibilitySnapshot(page, { interestingOnly: false });
     // Content selector, if not provided has some defaults
     log(`Inspecting element - ${selector}`);
-    return selectNode(snapshot, selector);
+    return selectNodes(snapshot, selector);
+}
+// Inspects a single element on the page based on the given selector (first match only)
+async function inspectElement(page, selector) {
+    return (await inspectElements(page, selector))?.[0];
 }
 // Inspects a page
 async function inspectPage(page, selector, options) {
@@ -2631,7 +2608,7 @@ class Interpreter {
         this.jsInterpreter.appendCode(code);
     }
     /**
-     * Intiailizes an interpreter instance bound to a host object
+     * Initializes an interpreter instance bound to a host object
      * @param jsInterpreter
      * @param globalObject
      * @param host
@@ -2656,7 +2633,7 @@ class Interpreter {
                         }
                         // Create a new async pending state
                         self.asyncPending = new Deferred();
-                        // Last argument passed in by the interpreter is the calbback
+                        // Last argument passed in by the interpreter is the callback
                         const doneCallback = proxyArgs.pop();
                         // Convert rest of the args to native JS values
                         const fnArgs = proxyArgs.map(a => jsInterpreter.pseudoToNative(a));
@@ -2673,7 +2650,7 @@ class Interpreter {
                             await Promise.resolve(self.options?.onErrorHostFunction?.(fnMetadata.name, hostFnError));
                         }
                         await Promise.resolve(self.options?.onExitHostFunction?.(fnMetadata.name));
-                        doneCallback(result);
+                        doneCallback(jsInterpreter.nativeToPseudo(result));
                         const asyncPending = self.asyncPending;
                         self.asyncPending = null;
                         asyncPending.resolve(true);
@@ -2686,20 +2663,22 @@ class Interpreter {
         }
     }
 }
-let libDefConent;
+let libDefContent;
 // Compiles the given DSL script and performs syntax checking. 
-// If the compilation fails, a SyntaxError exeception is thrown. 
+// If the compilation fails, a SyntaxError exception is thrown. 
 // Otherwise, the function returns the ESTree node for the program which can be passed into the interpreter
 async function compileScript(script) {
     let messages;
     let scriptSource;
     try {
-        if (!libDefConent) {
+        if (!libDefContent) {
             // Load the lib-definition file
-            libDefConent = (await fs.promises.readFile(path.join(__dirname, './dsl.lib.d.ts'))).toString();
+            const es5Lib = (await fs.promises.readFile(path.join(__dirname, './es5-dsl.lib.d.ts'))).toString();
+            const coreLib = (await fs.promises.readFile(path.join(__dirname, './dsl.lib.d.ts'))).toString();
+            libDefContent = `${coreLib}\n${es5Lib}`;
         }
         scriptSource = ts__namespace.createSourceFile("script.ts", `${script}`, ts__namespace.ScriptTarget.Latest);
-        const libSource = ts__namespace.createSourceFile("dsl.lib.d.ts", libDefConent, ts__namespace.ScriptTarget.Latest);
+        const libSource = ts__namespace.createSourceFile("dsl.lib.d.ts", libDefContent, ts__namespace.ScriptTarget.Latest);
         const customCompilerHost = {
             getSourceFile: (name, languageVersion) => {
                 if (name === scriptSource.fileName) {
@@ -2741,6 +2720,16 @@ async function compileScript(script) {
                 messages.push(message);
             }
         }
+        if (messages.length === 0) {
+            // No error, so continue with transpilation to plain JavaScript
+            return new Promise((resolve) => {
+                // Emit the TS source file to generate output
+                program.emit(scriptSource, (fileName, jsSource) => {
+                    //log(`TS compiler write file ${fileName} \n ${source}`)
+                    resolve(jsSource);
+                });
+            });
+        }
     }
     catch (error) {
         warn(`Compiler exception: ${error.message}\n${error.stack}`);
@@ -2750,11 +2739,6 @@ async function compileScript(script) {
         warn(errorMessage);
         throw new DSLSyntaxError(errorMessage);
     }
-    // If we don't have errors, parse the script again via Babel and down-compile to ES5 as that is what the interpreter supports
-    // Convert the ES6+ AST to ES5 (which is what the interpreter supports) using Babel
-    const result = await core.transformAsync(script, { ast: true, presets: ['@babel/preset-env'] });
-    log(`Compiled AST, found statements ${result.ast?.program?.body?.length ?? 0}`);
-    return result?.code;
 }
 function flattenDiagnosticMessageChain(chain) {
     const messages = [chain.messageText];
@@ -2976,7 +2960,7 @@ class AutomationEngine {
         this.page = page;
         this.options = options;
         try {
-            // Now intiialize the Interpreter
+            // Now initialize the Interpreter
             this.interpreter = new Interpreter(script, this, {
                 onEnterHostFunction: async () => {
                     // Every time we enter a host function, we want to flush out any previous queued out
@@ -2985,7 +2969,7 @@ class AutomationEngine {
                 onErrorHostFunction: async (fn, error) => {
                     // Error from one of the host functions is fatal
                     // We will route it to the same throw function that we can use from inside DSL
-                    await this._fnThrowEx_(error?.message);
+                    await this._fnThrowEx_(`${error?.message}\n${error?.stack}`);
                 }
             });
             // Append some system function definitions
@@ -3017,6 +3001,12 @@ class AutomationEngine {
                         __WaitFor(interval);
                     }
                 }
+                function JSONParse(json_string) {
+                    return JSON.parse(json_string);
+                }
+                function JSONStringify(val, space) {
+                    return JSON.stringify(val, null, space);
+                }
             `);
             if (options?.userMessage) {
                 this.taskAssistant = new TaskAssistant();
@@ -3029,7 +3019,7 @@ class AutomationEngine {
         }
     }
     /**
-     * Gets the status of the automatino engine
+     * Gets the status of the automation engine
      */
     get status() {
         if (this.error) {
@@ -3086,7 +3076,7 @@ class AutomationEngine {
     }
     /**
      * If there is any queued output by the automation engine, it will send that to the invoker by yielding current execution flow
-     * Awaiting on this allows the caller to continue their task flow when the automation endgine resumes execution
+     * Awaiting on this allows the caller to continue their task flow when the automation engine resumes execution
      */
     async flushQueuedOutput() {
         if (this.queuedOutput) {
@@ -3110,7 +3100,7 @@ class AutomationEngine {
         return input;
     }
     /**
-     * Handles automatino inputs by applying them to the underling page
+     * Handles automation inputs by applying them to the underling page
      * @param input Inputs to handle
      */
     async applyInput(input) {
@@ -3158,7 +3148,7 @@ class AutomationEngine {
         // This will allow the caller to know about the error and stop the execution
         await this.interpreter.yield();
     }
-    // __WaitForsTrue function is internal
+    // __WaitFor function is internal
     // It is used to pause execution and wait for a certain amount of time
     async _fnWaitFor_(delay) {
         await waitFor(delay);
@@ -3191,20 +3181,51 @@ class AutomationEngine {
             return false;
         }
     }
-    async _fnSelect_(selector) {
+    async _fnInspect_(options) {
+        // Find elements through inspection
+        let contents = await inspectElements(this.page, options.selector);
+        return contents;
+    }
+    async _fnSetValue_(selector, value) {
+        log(`Setting value of the element - ${selector}`);
+        // Make sure the page is active
+        await this.page.bringToFront();
+        // Find the element through inspection
+        const elementARIANode = await inspectElement(this.page, selector);
+        const element = elementARIANode ? await resolveAccessibleElement(this.page, asInt(elementARIANode.nodeId)) : null;
+        if (element) {
+            if (await withRetries(() => trySetInputElement(this.page, element, selector, value), 5, 500)) {
+                log(`Set value of the element - ${selector}`);
+            }
+            else {
+                await this._fnThrowEx_(`Failed to set value of the element - ${selector}`);
+            }
+        }
+        else {
+            this._fnThrowEx_(`Element not found - ${selector}`);
+        }
+    }
+    async _fnSelect_(selector, options) {
         log(`Selecting element - ${selector}`);
         // Make sure the page is active
         await this.page.bringToFront();
-        const targetSelector = `::-p-aria(${selector})`;
-        if (await withRetries(() => tryClick(this.page, targetSelector), 5, 500)) {
-            log(`Selected element - ${selector}`);
+        // Find the element through inspection
+        const elementARIANode = await inspectElement(this.page, selector);
+        const element = elementARIANode ? await resolveAccessibleElement(this.page, asInt(elementARIANode.nodeId)) : null;
+        if (element) {
+            if (await withRetries(() => tryClickElement(this.page, element, selector, options), 5, 500)) {
+                log(`Selected element - ${selector}`);
+            }
+            else {
+                await this._fnThrowEx_(`Failed to click element - ${selector}`);
+            }
         }
         else {
-            await this._fnThrowEx_(`Failed to click element - ${selector}`);
+            this._fnThrowEx_(`Element not found - ${selector}`);
         }
     }
     async _fnPresent_(options) {
-        const settings = this.currentPresentationSettings = {
+        const settings = {
             selector: options?.select,
             options: {
                 include: options?.include,
@@ -3223,7 +3244,9 @@ class AutomationEngine {
                     nodeId: 0
                 }];
         }
-        const rootContent = contents[0];
+        // If we got back multiple content nodes, then wrap them in a generic node, otherwise use the sole node to present
+        const rootContent = contents.length > 0 ? { role: "generic", nodeId: 0, children: contents } : contents[0];
+        //log(`Present contents - ${JSON.stringify(rootContent)}`)
         const children = rootContent.children = rootContent.children ?? [];
         if (options?.title) {
             // Insert a title node at the very beginning
@@ -3236,7 +3259,7 @@ class AutomationEngine {
         }
         if (options?.description) {
             // Insert the description following any existing H1 node 
-            // or at the begining if none exists
+            // or at the beginning if none exists
             const h1Index = children.findIndex(c => c.role == "heading" && c.level == 1);
             rootContent.children.splice(h1Index + 1, 0, {
                 role: "paragraph",
@@ -3245,14 +3268,15 @@ class AutomationEngine {
             });
         }
         if (alerts?.length > 0) {
-            // Add alerts to the presentation output, to the very begining
+            // Add alerts to the presentation output, to the very beginning
             alerts.forEach(alert => children.unshift(alert));
         }
-        await this.queueOutput({ contents, summarize: true });
+        await this.queueOutput({ contents: [rootContent], summarize: true });
     }
     async _fnConfirm_(options) {
         const radioGroupNodeId = -1;
         let dynamicNodeId = 1;
+        const useCombobox = options.style === "compact";
         const contentRoot = {
             role: 'generic',
             nodeId: dynamicNodeId++,
@@ -3260,15 +3284,16 @@ class AutomationEngine {
                 options.title ? { role: 'heading', name: options.title, level: 1, nodeId: dynamicNodeId++ } : null,
                 options.description ? { role: 'paragraph', name: options.description, nodeId: dynamicNodeId++, } : null,
                 {
-                    role: 'radiogroup',
+                    role: useCombobox ? 'combobox' : 'radiogroup',
                     nodeId: radioGroupNodeId,
                     name: options.label,
                     required: true,
                     children: options.choices.map(choice => {
                         return {
-                            role: 'radio',
+                            role: useCombobox ? 'option' : 'radio',
                             nodeId: dynamicNodeId++,
-                            name: choice
+                            name: typeof choice === 'string' ? choice : choice.name,
+                            value: typeof choice === 'string' ? choice : choice.value
                         };
                     })
                 }
@@ -3284,6 +3309,9 @@ class AutomationEngine {
             this.taskAssistant.addSystemMessage(message);
         }
     }
+    async __fnLog(message) {
+        log(message);
+    }
     async applyAutoResolution(output) {
         if (this.taskAssistant && output?.contents) {
             let inputsNeeded = false, autoResolutionApplied = false;
@@ -3297,7 +3325,7 @@ class AutomationEngine {
                 }
             }
             if (output.summarize && this.options?.generateSummary && !inputsNeeded) {
-                // Now include a summay message of the step
+                // Now include a summary message of the step
                 output = { ...output, message: await this.summarize(output.contents, autoResolutionApplied) };
             }
         }
@@ -3310,7 +3338,7 @@ class AutomationEngine {
             if (inputNodes?.length > 0) {
                 // Generate task inputs
                 const taskInputs = this.convertToTaskInputs(inputNodes);
-                const titleNode = selectNode(nodes[0], "heading[level=1");
+                const titleNode = selectNode(nodes[0], "heading[level=1]");
                 return await this.taskAssistant.summarizeStep({ title: titleNode?.name, inputs: taskInputs }, asNextAction);
             }
         }
@@ -3322,7 +3350,7 @@ class AutomationEngine {
             if (inputNodes?.length > 0) {
                 // Generate task inputs
                 const taskInputs = this.convertToTaskInputs(inputNodes);
-                const titleNode = selectNode(nodes[0], "heading[level=1");
+                const titleNode = selectNode(nodes[0], "heading[level=1]");
                 const predictions = await this.taskAssistant.resolveStepInputs({ title: titleNode?.name, inputs: taskInputs });
                 // Apply output values to all input nodes, and build up the resolved input set
                 const resolvedInputs = [];
@@ -3353,6 +3381,10 @@ class AutomationEngine {
     convertToTaskInputs(inputNodes) {
         return inputNodes
             .map(node => {
+            if (node.inputType === "password") {
+                // Do not get suggestion for password
+                return null;
+            }
             switch (node.role?.toLowerCase()) {
                 case 'radiogroup':
                 case 'combobox':
@@ -3394,6 +3426,12 @@ __decorate([
     dslFunction("Exists")
 ], AutomationEngine.prototype, "_fnExists_", null);
 __decorate([
+    dslFunction("Inspect")
+], AutomationEngine.prototype, "_fnInspect_", null);
+__decorate([
+    dslFunction("SetValue")
+], AutomationEngine.prototype, "_fnSetValue_", null);
+__decorate([
     dslFunction("Select")
 ], AutomationEngine.prototype, "_fnSelect_", null);
 __decorate([
@@ -3405,6 +3443,9 @@ __decorate([
 __decorate([
     dslFunction("Note")
 ], AutomationEngine.prototype, "__fnNote", null);
+__decorate([
+    dslFunction("Log")
+], AutomationEngine.prototype, "__fnLog", null);
 var AutomationStatus;
 (function (AutomationStatus) {
     AutomationStatus[AutomationStatus["Ready"] = 0] = "Ready";
@@ -3561,7 +3602,7 @@ class CardBuilder {
                     type: "TextBlock",
                     id: this.newElementId(),
                     text: node.name,
-                    style: 'paragraph',
+                    style: 'default',
                     wrap: true,
                 };
             // Handle generic containers
@@ -3609,6 +3650,7 @@ class CardBuilder {
                 default:
                     return this.createAdaptiveInput(node, {
                         type: "Input.Text",
+                        style: node.inputType,
                         value: toString(node.value)
                     });
             }
@@ -3661,14 +3703,14 @@ class CardBuilder {
     }
     generateCardActions(nodes, maxCount) {
         return nodes?.filter(n => n.role == "button")
-            .filter(n => n.constrastRatio > 0)
-            .sort((a, b) => a.constrastRatio - b.constrastRatio)
+            .filter(n => n.contrastRatio > 0)
+            .sort((a, b) => a.contrastRatio - b.contrastRatio)
             .slice(0, maxCount)
             .map(n => ({
             type: "Action.Submit",
-            id: n.nodeId,
+            id: toString(n.nodeId),
             title: n.name,
-            style: n.constrastRatio > 10 ? "positive" : "default",
+            style: n.contrastRatio > 10 ? "positive" : "default",
             data: {
                 sessionId: this.sessionId,
                 executionMode: this.executionMode,
@@ -3805,7 +3847,7 @@ var AutomationService;
             return (await action());
         }
         catch (error) {
-            warn(`${error}`);
+            warn(`${error}\n${error?.stack ?? ''}`);
             let errorResult;
             if (error instanceof puppeteer.TimeoutError) {
                 errorResult = { status: AutomationStatus.Failed, error: "Operation timed out, please try again" };
@@ -3830,12 +3872,12 @@ var AutomationService;
         }
     }
     /**
-     * Peforms the initial navigation in an automation script
+     * Performs the initial navigation in an automation script
      */
     async function _startNavigation(request) {
         const { enableLiveView } = request;
         // If we are in the "manual" login mode, close out all existing sessions for this user first
-        // A user is only allowed one active session at a time, untless we are reusing an existing session
+        // A user is only allowed one active session at a time, unless we are reusing an existing session
         const singleSession = config.loginMode === "manual";
         const beginRequest = async () => {
             const { url, path, sessionId } = request;
@@ -3933,10 +3975,10 @@ var AutomationService;
         }
     }
     function _toAutomationResult(sessionId, executionMode, automationResult) {
-        var rootNode = automationResult?.contents?.[0];
+        const rootNode = automationResult?.contents?.[0];
         // Did we get any content?
-        var hasContent = rootNode != null && rootNode.children?.length > 0;
-        var automationStatus = automationResult?.status ?? AutomationStatus.Failed;
+        const hasContent = rootNode != null && rootNode.children?.length > 0;
+        const automationStatus = automationResult?.status ?? AutomationStatus.Failed;
         // If automation is no longer executing, close the current session
         // 7/3/2024 - Reverting chaining to allow better concurrency and avoid exhaustion of browser pool
         if (automationStatus != AutomationStatus.Executing) {
@@ -3947,9 +3989,9 @@ var AutomationService;
         if (hasContent) {
             // Should the card allow further interaction?
             // This is only allowed if automation is still executing and we got the expected content
-            var allowInteraction = (automationStatus == AutomationStatus.Executing);
-            var cardBuilder = new CardBuilder(rootNode, allowInteraction, executionMode, sessionId, automationResult);
-            var card = cardBuilder.generateCard();
+            const allowInteraction = (automationStatus == AutomationStatus.Executing);
+            const cardBuilder = new CardBuilder(rootNode, allowInteraction, executionMode, sessionId, automationResult);
+            const card = cardBuilder.generateCard();
             return {
                 status: AutomationStatus[automationStatus],
                 cardJSON: JSON.stringify(card),
@@ -4194,7 +4236,7 @@ async function initializeRelayServer() {
                     warn(`Relay request execution error ${error}`);
                     // Any error is returned as 500
                     res.statusCode = 500;
-                    res.end(`Error: ${error}`);
+                    res.end(`Error: ${error}\n${error?.stack ?? ''}`);
                 }
             });
         });
@@ -4334,8 +4376,9 @@ app.post('/close', processRequest(async (req, res) => {
     await AutomationService.Legacy.close(req.body);
     res.status(200).send();
 }));
-// Serve the static DSL type definition file
+// Serve the static DSL type definition files
 app.use("/lib/dsl.lib.d.ts", express.static(__dirname + '/dsl.lib.d.ts'));
+app.use("/lib/es5-dsl.lib.d.ts", express.static(__dirname + '/es5-dsl.lib.d.ts'));
 const port = 7000;
 httpServer.listen(port, function () {
     log(`Running on port 7000.`);
